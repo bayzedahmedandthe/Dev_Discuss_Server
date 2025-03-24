@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const app = express();
@@ -22,6 +23,14 @@ const client = new MongoClient(uri, {
 
 async function run() {
     try {
+        const questionCollection = client.db("devDB").collection("questions");
+
+        // Questions related apis
+        app.post("/questions", async(req, res) => {
+            const question = req.body;
+            const result = await questionCollection.insertOne(question);
+            res.send(result);
+        });
 
 
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
