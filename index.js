@@ -3,7 +3,11 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 5000;
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
+const systemTheme = process.env.SYSTEM_INFO
+const genAI = new GoogleGenerativeAI(process.env.AI_SECRET_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" , systemInstruction: systemTheme,});
 // Middlewares
 app.use(cors({
     origin: "http://localhost:5173",
@@ -11,7 +15,6 @@ app.use(cors({
 }));
 
 app.use(express.json());
-
 
 const { MongoClient, ServerApiVersion } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.gekes.mongodb.net/?appName=Cluster0`;
@@ -28,6 +31,37 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         const questionCollection = client.db("devDB").collection("questions");
+
+// Ai Assistance api 
+const chat = model.startChat({history:[]})
+
+app.post("/chat", async (req, res) => {
+    try {
+      const { message } = req.body;
+  
+      if (!message) {
+        return res.status(400).json({ error: "Message is required" });
+      }
+  
+      let result = await chat.sendMessageStream(message);
+      let responseText = "";
+  
+      for await (const chunk of result.stream) {
+        responseText += chunk.text();
+      }
+  
+      res.json({ response: responseText });
+    } catch (error) {
+      console.error("Error:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+  
+
+
+
+
+
 
         // Questions related apis
         app.post("/questions", async(req, res) => {
