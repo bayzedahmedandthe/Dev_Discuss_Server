@@ -5,12 +5,12 @@ const app = express();
 const port = process.env.PORT || 5000;
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
+const systemTheme = process.env.SYSTEM_INFO
 const genAI = new GoogleGenerativeAI(process.env.AI_SECRET_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" , systemInstruction: "You're name is TwinAI .You're developed by PH-Polite team . And you're responsibility is guide people for there code related problem you're used in Dev discuss website here you live .Dev discuss is a developer help tool here developer can find there error solution via various way like asking question or reading blogs or asking you assist people to write bug free code ",});
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" , systemInstruction: systemTheme,});
 // Middlewares
 app.use(cors());
 app.use(express.json());
-
 
 const { MongoClient, ServerApiVersion } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.gekes.mongodb.net/?appName=Cluster0`;
