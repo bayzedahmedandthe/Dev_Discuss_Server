@@ -5,7 +5,11 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 // Middlewares
-app.use(cors());
+app.use(cors({
+    origin: "http://localhost:5173",
+    credentials: true
+}));
+
 app.use(express.json());
 
 
@@ -38,11 +42,11 @@ async function run() {
 
     }
 }
-run().catch(console.dir);
+// run().catch(console.dir);
 
 
 app.get("/", (req, res) => {
-    res.send("Dev Discuss Server is running now")
+    res.send("Dev Discuss Server is running now in vision")
 });
 app.listen(port, () => {
     console.log(`Dev Discuss Server is running on port ${port}`);
