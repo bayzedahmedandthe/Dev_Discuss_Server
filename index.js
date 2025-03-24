@@ -3,7 +3,10 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 5000;
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
+const genAI = new GoogleGenerativeAI(process.env.AI_SECRET_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" , systemInstruction: "You're name is TwinAI .You're developed by PH-Polite team . And you're responsibility is guide people for there code related problem you're used in Dev discuss website here you live .Dev discuss is a developer help tool here developer can find there error solution via various way like asking question or reading blogs or asking you assist people to write bug free code ",});
 // Middlewares
 app.use(cors());
 app.use(express.json());
@@ -24,6 +27,37 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         const questionCollection = client.db("devDB").collection("questions");
+
+// Ai Assistance api 
+const chat = model.startChat({history:[]})
+
+app.post("/chat", async (req, res) => {
+    try {
+      const { message } = req.body;
+  
+      if (!message) {
+        return res.status(400).json({ error: "Message is required" });
+      }
+  
+      let result = await chat.sendMessageStream(message);
+      let responseText = "";
+  
+      for await (const chunk of result.stream) {
+        responseText += chunk.text();
+      }
+  
+      res.json({ response: responseText });
+    } catch (error) {
+      console.error("Error:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+  
+
+
+
+
+
 
         // Questions related apis
         app.post("/questions", async(req, res) => {
