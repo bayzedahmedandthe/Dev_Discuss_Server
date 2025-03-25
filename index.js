@@ -9,10 +9,9 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // Middlewares
 app.use(cors({
-    origin: "http://localhost:5173",
+    origin: "*",
     credentials: true
 }));
-
 app.use(express.json());
 
 
@@ -27,45 +26,54 @@ const client = new MongoClient(uri, {
     }
 });
 
-let questionCollection; // ✅ Define in global scope
+let questionCollection; // ✅ Define collection globally
 
 async function run() {
     try {
-        const questionCollection = client.db("devDB").collection("questions");
+        await client.connect();
+        console.log("✅ Successfully connected to MongoDB!");
+
+        // ✅ Assign collection to global variable
+        questionCollection = client.db("devDB").collection("questions");
 
     } catch (error) {
         console.error("❌ MongoDB connection error:", error);
     }
 }
-
 run();
 
+// ✅ GET All Questions
 app.get("/questions", async (req, res) => {
     try {
-        const questions = await questionCollection.find().toArray();
+        const questions = await questionCollection.find({}).toArray();
+        
+        if (!questions.length) {
+            return res.status(404).send({ message: "No questions found" });
+        }
+
         res.send(questions);
     } catch (error) {
         res.status(500).send({ message: "Error fetching questions", error });
     }
-})
+});
 
-// ✅ GET a question by ID
+
 app.get("/questions/:id", async (req, res) => {
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const result = await questionCollection.findOne(query);
+    res.send(result);
+});
+
+// ✅ POST New Question (Fix 404 Error)
+app.post("/questions", async (req, res) => {
     try {
-        const id = req.params.id;
-        if (!ObjectId.isValid(id)) {
-            return res.status(400).send({ message: "Invalid ID format" });
-        }
-        const query = { _id: new ObjectId(id) };
-        const result = await questionCollection.findOne(query);
+        const newQuestion = req.body;
+        const result = await questionCollection.insertOne(newQuestion);
 
-        if (!result) {
-            return res.status(404).send({ message: "Question not found" });
-        }
-
-        res.send(result);
+        res.status(201).send(result);
     } catch (error) {
-        res.status(500).send({ message: "Error fetching question", error });
+        res.status(500).send({ message: "Error adding question", error });
     }
 });
 
