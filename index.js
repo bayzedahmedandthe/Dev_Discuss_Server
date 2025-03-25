@@ -5,18 +5,16 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
 const port = process.env.PORT || 5000;
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// Middlewares
+// ✅ CORS Middleware
 app.use(cors({
     origin: "*",
     credentials: true
 }));
 app.use(express.json());
 
-
-const { MongoClient, ServerApiVersion } = require('mongodb');
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.gekes.mongodb.net/?appName=Cluster0`;
+// ✅ MongoDB Connection
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.gekes.mongodb.net/?retryWrites=true&w=majority`;
 
 const client = new MongoClient(uri, {
     serverApi: {
@@ -30,12 +28,11 @@ let questionCollection; // ✅ Define collection globally
 
 async function run() {
     try {
-        await client.connect();
+        await client.db("admin").command({ ping: 1 }); // ✅ Ping database
         console.log("✅ Successfully connected to MongoDB!");
 
         // ✅ Assign collection to global variable
         questionCollection = client.db("devDB").collection("questions");
-
     } catch (error) {
         console.error("❌ MongoDB connection error:", error);
     }
