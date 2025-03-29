@@ -103,6 +103,44 @@ app.get("/questions/comments/:id", async (req, res) => {
     }
 });
 
+// ✅ GET Tags (Unique Tags with Counts from Questions Collection)
+app.get("/tags", async (req, res) => {
+    try {
+        const questions = await questionCollection.find({}).toArray();
+        const tagsCount = {};
+
+        // Loop through the questions and count tags
+        questions.forEach((question) => {
+            if (Array.isArray(question.tag)) {
+                question.tag.forEach((tag) => {
+                    if (tagsCount[tag]) {
+                        tagsCount[tag]++;
+                    } else {
+                        tagsCount[tag] = 1;
+                    }
+                });
+            } else {
+                if (tagsCount[question.tag]) {
+                    tagsCount[question.tag]++;
+                } else {
+                    tagsCount[question.tag] = 1;
+                }
+            }
+        });
+
+        // Convert the tagsCount object into an array of objects
+        const tagsWithCount = Object.keys(tagsCount).map((tag) => ({
+            tag,
+            count: tagsCount[tag],
+        }));
+
+        res.send(tagsWithCount);
+    } catch (error) {
+        res.status(500).send({ message: "Error fetching tags", error });
+    }
+});
+
+
 // ✅ POST Comment on a Specific Question
 app.post("/questions/comments/:id", async (req, res) => {
     try {
