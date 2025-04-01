@@ -114,11 +114,24 @@ app.get("/tags", async (req, res) => {
 app.post("/questions/comments/:id", async (req, res) => {
     try {
         const id = req.params.id;
+
         if (!ObjectId.isValid(id)) {
             return res.status(400).send({ error: "Invalid question ID format" });
         }
 
-        const newComment = { text: req.body.text, createdAt: new Date() };
+        const { text, userName, photoURL } = req.body;
+
+        if (!text || !userName) {
+            return res.status(400).send({ error: "Text and userName are required" });
+        }
+
+        const newComment = {
+            text,
+            userName,
+            photoURL: photoURL || "", // Default empty string if no photo is provided
+            createdAt: new Date().toISOString(), // Standard date format
+        };
+
         const result = await questionCollection.updateOne(
             { _id: new ObjectId(id) },
             { $push: { comments: newComment } }
@@ -130,9 +143,10 @@ app.post("/questions/comments/:id", async (req, res) => {
 
         res.status(201).send(newComment);
     } catch (error) {
+        console.error("Error adding comment:", error);
         res.status(500).send({ error: "Error adding comment" });
     }
-});
+}); 
 
 // ✅ Root API
 app.get("/", (req, res) => {
