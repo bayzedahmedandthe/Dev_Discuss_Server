@@ -150,7 +150,7 @@ app.post("/questions/comments/:id", async (req, res) => {
 
 // ✅ Root API
 app.get("/", (req, res) => {
-    res.send("🚀 Dev Discuss Server is running now");
+    res.send("🚀 Dev Discuss Server is running now on vercel.");
 });
 
 // ✅ Start Server
