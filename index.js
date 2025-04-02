@@ -15,7 +15,6 @@ app.use(
 );
 app.use(express.json());
 
-// ✅ MongoDB Connection
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.gekes.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, {
     serverApi: {
@@ -38,7 +37,6 @@ async function run() {
 }
 run();
 
-// ✅ GET All Questions
 app.get("/questions", async (req, res) => {
     try {
         const questions = await questionCollection.find({}).sort({ _id: -1 }).toArray();
@@ -48,7 +46,6 @@ app.get("/questions", async (req, res) => {
     }
 });
 
-// ✅ GET Questions by Tag
 app.get("/questions/tag/:tag", async (req, res) => {
     try {
         const { tag } = req.params;
@@ -59,7 +56,6 @@ app.get("/questions/tag/:tag", async (req, res) => {
     }
 });
 
-// ✅ GET Single Question by ID
 app.get("/questions/:id", async (req, res) => {
     try {
         const id = req.params.id;
@@ -76,7 +72,6 @@ app.get("/questions/:id", async (req, res) => {
     }
 });
 
-// ✅ POST New Question
 app.post("/questions", async (req, res) => {
     try {
         const newQuestion = { ...req.body, votes: 0, comments: [] };
@@ -86,8 +81,6 @@ app.post("/questions", async (req, res) => {
         res.status(500).send({ error: "Error adding question" });
     }
 });
-
-// ✅ GET Tags with Counts
 app.get("/tags", async (req, res) => {
     try {
         const questions = await questionCollection.find({}).toArray();
