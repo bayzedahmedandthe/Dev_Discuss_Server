@@ -6,6 +6,13 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
 const port = process.env.PORT || 5000;
 
+
+const systemTheme = process.env.SYSTEM_INFO
+const genAI = new GoogleGenerativeAI(process.env.AI_SECRET_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstruction: systemTheme, });
+// Middlewares
+
+
 // ✅ CORS Middleware
 app.use(
     cors({
@@ -13,6 +20,7 @@ app.use(
         credentials: true,
     })
 );
+
 app.use(express.json());
 
 // ✅ MongoDB Connection
@@ -59,6 +67,33 @@ app.get("/questions/tag/:tag", async (req, res) => {
     }
 });
 
+
+        // Ai Assistance api 
+        const chat = model.startChat({ history: [] })
+
+        app.post("/chat", async (req, res) => {
+            try {
+                const { message } = req.body;
+
+                if (!message) {
+                    return res.status(400).json({ error: "Message is required" });
+                }
+
+                let result = await chat.sendMessageStream(message);
+                let responseText = "";
+
+                for await (const chunk of result.stream) {
+                    responseText += chunk.text();
+                }
+
+                res.json({ response: responseText });
+            } catch (error) {
+                console.error("Error:", error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
+
+
 // ✅ GET Single Question by ID
 app.get("/questions/:id", async (req, res) => {
     try {
@@ -86,6 +121,7 @@ app.post("/questions", async (req, res) => {
         res.status(500).send({ error: "Error adding question" });
     }
 });
+
 
 // ✅ GET Tags with Counts
 app.get("/tags", async (req, res) => {
@@ -125,6 +161,21 @@ app.post("/questions/comments/:id", async (req, res) => {
             return res.status(400).send({ error: "Text and userName are required" });
         }
 
+
+        // Questions related apis
+        app.post("/questions", async (req, res) => {
+            const question = req.body;
+            const result = await questionCollection.insertOne(question);
+            res.send(result);
+        });
+
+        app.get("/questions/:id", async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await questionCollection.findOne(query);
+            res.send(result);
+        });
+
         const newComment = {
             text,
             userName,
@@ -136,6 +187,7 @@ app.post("/questions/comments/:id", async (req, res) => {
             { _id: new ObjectId(id) },
             { $push: { comments: newComment } }
         );
+
 
         if (result.modifiedCount === 0) {
             return res.status(500).send({ error: "Comment could not be added" });
