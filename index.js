@@ -12,7 +12,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstru
 app.use(cors());
 app.use(express.json());
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.gekes.mongodb.net/?appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -27,6 +27,7 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         const questionCollection = client.db("devDB").collection("questions");
+        const savesQuestionsCollection = client.db("devDB").collection("saveQuestions");
 
         // Ai Assistance api 
         const chat = model.startChat({ history: [] })
@@ -65,13 +66,46 @@ async function run() {
             const result = await questionCollection.insertOne(question);
             res.send(result);
         });
+        // ✅ Get all questions
+        app.get("/questions", async (req, res) => {
+            try {
+                const questions = await questionCollection.find({}).toArray();
 
+                if (!questions.length) {
+                    return res.status(404).send({ message: "No questions found" });
+                }
+
+                res.send(questions);
+            } catch (error) {
+                res.status(500).send({ message: "Error fetching questions", error });
+            }
+        });
+        // Get uestions details
         app.get("/questions/:id", async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await questionCollection.findOne(query);
             res.send(result);
         });
+        
+        // Saves questions related apis
+        app.post("/saves", async(req, res) => {
+            const savesQuestions = req.body;
+            const result = await savesQuestionsCollection.insertOne(savesQuestions);
+            res.send(result);
+        });
+        app.get("/saves", async(req, res) => {
+            const email = req.query.email;
+            // console.log(email)
+            let query = {};
+            if(email){
+                query = {email: email}
+            }
+            console.log(query)
+            const result =await  savesQuestionsCollection.find(query).toArray();
+            // console.log(result)
+           res.send(result);
+        })
 
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
