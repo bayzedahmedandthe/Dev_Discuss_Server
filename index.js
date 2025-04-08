@@ -17,7 +17,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstru
 // ✅ CORS Middleware
 app.use(
     cors({
-        origin: ["http://localhost:5173", "https://null-car.surge.sh","https://delightful-moonbeam-35514b.netlify.app"],
+        origin: true,
         credentials: true,
     })
 );
