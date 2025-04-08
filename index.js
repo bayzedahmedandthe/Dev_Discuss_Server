@@ -34,23 +34,28 @@ const client = new MongoClient(uri, {
     },
 });
 
-let questionCollection;
+
 
 async function run() {
     try {
         await client.db("admin").command({ ping: 1 });
         console.log("✅ Successfully connected to MongoDB!");
-        questionCollection = client.db("devDB").collection("questions");
+
     } catch (error) {
         console.error("❌ MongoDB connection error:", error);
     }
 }
 run();
-
+        const questionCollection = client.db("devDB").collection("questions");
 // ✅ GET All Questions
 app.get("/questions", async (req, res) => {
     try {
-        const questions = await questionCollection.find({}).sort({ _id: -1 }).toArray();
+        const questions = await questionCollection.find({}).toArray();
+
+        if (!questions.length) {
+            return res.status(404).send({ message: "No questions found" });
+        }
+
         res.send(questions);
     } catch (error) {
         res.status(500).send({ message: "Error fetching questions", error });
@@ -169,20 +174,8 @@ app.post("/questions/comments/:id", async (req, res) => {
             const result = await questionCollection.insertOne(question);
             res.send(result);
         });
-        // ✅ Get all questions
-        app.get("/questions", async (req, res) => {
-            try {
-                const questions = await questionCollection.find({}).toArray();
 
-                if (!questions.length) {
-                    return res.status(404).send({ message: "No questions found" });
-                }
 
-                res.send(questions);
-            } catch (error) {
-                res.status(500).send({ message: "Error fetching questions", error });
-            }
-        });
         // Get uestions details
         app.get("/questions/:id", async (req, res) => {
             const id = req.params.id;
