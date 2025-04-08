@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -16,7 +17,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstru
 // ✅ CORS Middleware
 app.use(
     cors({
-        origin: ["http://localhost:5173", "https://null-car.surge.sh"],
+        origin: ["http://localhost:5173", "https://null-car.surge.sh","https://delightful-moonbeam-35514b.netlify.app"],
         credentials: true,
     })
 );
