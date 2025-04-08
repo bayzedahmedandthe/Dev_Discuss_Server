@@ -169,13 +169,46 @@ app.post("/questions/comments/:id", async (req, res) => {
             const result = await questionCollection.insertOne(question);
             res.send(result);
         });
+        // ✅ Get all questions
+        app.get("/questions", async (req, res) => {
+            try {
+                const questions = await questionCollection.find({}).toArray();
 
+                if (!questions.length) {
+                    return res.status(404).send({ message: "No questions found" });
+                }
+
+                res.send(questions);
+            } catch (error) {
+                res.status(500).send({ message: "Error fetching questions", error });
+            }
+        });
+        // Get uestions details
         app.get("/questions/:id", async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await questionCollection.findOne(query);
             res.send(result);
         });
+        
+        // Saves questions related apis
+        app.post("/saves", async(req, res) => {
+            const savesQuestions = req.body;
+            const result = await savesQuestionsCollection.insertOne(savesQuestions);
+            res.send(result);
+        });
+        app.get("/saves", async(req, res) => {
+            const email = req.query.email;
+            // console.log(email)
+            let query = {};
+            if(email){
+                query = {email: email}
+            }
+            console.log(query)
+            const result =await  savesQuestionsCollection.find(query).toArray();
+            // console.log(result)
+           res.send(result);
+        })
 
         const newComment = {
             text,
