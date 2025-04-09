@@ -47,6 +47,7 @@ async function run() {
 }
 run();
         const questionCollection = client.db("devDB").collection("questions");
+        const blogCollection = client.db("devDB").collection("blogs");
 // ✅ GET All Questions
 app.get("/questions", async (req, res) => {
     try {
@@ -72,9 +73,64 @@ app.get("/questions/tag/:tag", async (req, res) => {
         res.status(500).send({ message: "Error fetching questions by tag", error });
     }
 });
+// gemini response 
+const generateGeminiPrompt = async(promptText)=>{
+try{
+const result = await model.generateContent(promptText)
+const response = result.response
+return response.text()
+}catch(err){
+console.error(`error ${err}`)
+return "AI failed to generate response.";
+}
+}
+// Error analyzer
+app.post("/fixFlow", async (req, res) => {
+    const { userInput, selectedOption } = req.body;
+  
+    const prompt = `This is the error: ${userInput}. What would be the most relevant tag (like 'react', 'security', 'nodejs', etc.) for this error? Only return one word.`;
 
-
-        // Ai Assistance api 
+    const topic = await generateGeminiPrompt(prompt);
+    const cleanedTopic = topic.trim().toLowerCase(); 
+    try {
+      if (selectedOption === "blog") {
+   
+        const blogs = await blogCollection.find({
+            tags: {
+              $elemMatch: {
+                $regex: new RegExp(cleanedTopic, "i")
+              }
+            }
+          }).toArray();
+          
+console.log(blogs)
+        return res.json({ type: "blog", topic, blogs });
+      }
+  
+      if (selectedOption === "question") {
+        const questions = await questionCollection.find({
+            tag: { $regex: cleanedTopic, $options: 'i' }
+          }).toArray();
+          
+        console.log(questions)
+        return res.json({ type: "question", questions});
+      }
+  
+      if (selectedOption === "ai_code") {
+        const fixPrompt = `A user encountered this error: "${userInput}". Can you provide a possible fix or improved version of the code with explanation?`;
+        const aiResponse = await generateGeminiPrompt(fixPrompt);
+  
+        return res.json({ type: "ai_code", aiResponse });
+      }
+  
+      res.status(400).json({ error: "Invalid option selected" });
+    } catch (err) {
+      console.error("❌ Error in /api/handle-error:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+  
+ // Ai Assistance api 
         const chat = model.startChat({ history: [] })
 
         app.post("/chat", async (req, res) => {
@@ -127,8 +183,16 @@ app.post("/questions", async (req, res) => {
         res.status(500).send({ error: "Error adding question" });
     }
 });
-
-
+// blogs post 
+app.post('/blogs',async(req,res)=>{
+    const blog = req.body
+    const result = await blogCollection.insertOne(blog)
+    res.send(result)
+})
+app.get('/blogs',async(req,res)=>{
+    const blogs = await blogCollection.find().toArray()
+    res.send(blogs)
+})
 // ✅ GET Tags with Counts
 app.get("/tags", async (req, res) => {
     try {
