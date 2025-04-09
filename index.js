@@ -7,9 +7,9 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 
-// const systemTheme = process.env.SYSTEM_INFO
-// const genAI = new GoogleGenerativeAI(process.env.AI_SECRET_API_KEY);
-// const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstruction: systemTheme, });
+const systemTheme = process.env.SYSTEM_INFO
+const genAI = new GoogleGenerativeAI(process.env.AI_SECRET_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstruction: systemTheme, });
 // Middlewares
 
 
@@ -71,29 +71,29 @@ app.get("/questions/tag/:tag", async (req, res) => {
 
 
 // Ai Assistance api 
-// const chat = model.startChat({ history: [] })
+const chat = model.startChat({ history: [] })
 
-// app.post("/chat", async (req, res) => {
-//     try {
-//         const { message } = req.body;
+app.post("/chat", async (req, res) => {
+    try {
+        const { message } = req.body;
 
-//         if (!message) {
-//             return res.status(400).json({ error: "Message is required" });
-//         }
+        if (!message) {
+            return res.status(400).json({ error: "Message is required" });
+        }
 
-//         let result = await chat.sendMessageStream(message);
-//         let responseText = "";
+        let result = await chat.sendMessageStream(message);
+        let responseText = "";
 
-//         for await (const chunk of result.stream) {
-//             responseText += chunk.text();
-//         }
+        for await (const chunk of result.stream) {
+            responseText += chunk.text();
+        }
 
-//         res.json({ response: responseText });
-//     } catch (error) {
-//         console.error("Error:", error);
-//         res.status(500).json({ error: "Internal Server Error" });
-//     }
-// });
+        res.json({ response: responseText });
+    } catch (error) {
+        console.error("Error:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
 
 
 // ✅ GET Single Question by ID
@@ -186,12 +186,7 @@ app.post("/questions/comments/:id", async (req, res) => {
         res.status(500).send({ error: "Error adding comment" });
     }
 });
-// Questions related apis
-// app.post("/questions", async (req, res) => {
-//     const question = req.body;
-//     const result = await questionCollection.insertOne(question);
-//     res.send(result);
-// });
+
 // ✅ Get all questions
 app.get("/questions", async (req, res) => {
     try {
