@@ -187,11 +187,11 @@ app.post("/questions/comments/:id", async (req, res) => {
     }
 });
 // Questions related apis
-app.post("/questions", async (req, res) => {
-    const question = req.body;
-    const result = await questionCollection.insertOne(question);
-    res.send(result);
-});
+// app.post("/questions", async (req, res) => {
+//     const question = req.body;
+//     const result = await questionCollection.insertOne(question);
+//     res.send(result);
+// });
 // ✅ Get all questions
 app.get("/questions", async (req, res) => {
     try {
@@ -206,6 +206,17 @@ app.get("/questions", async (req, res) => {
         res.status(500).send({ message: "Error fetching questions", error });
     }
 });
+// get single user question
+app.get("/userQuestions", async (req, res) => {
+    const email = req.query.email;
+    let query = {};
+    if (email) {
+        query = { userEmail: email }
+    };
+    const result = await questionCollection.find(query).toArray();
+    res.send(result);
+});
+app.get("/")
 // Get uestions details
 app.get("/questions/:id", async (req, res) => {
     const id = req.params.id;
@@ -216,23 +227,20 @@ app.get("/questions/:id", async (req, res) => {
 // Saves questions related apis
 app.post("/saves", async (req, res) => {
     const savesQuestions = req.body;
-    // console.log(savesQuestions);
     const result = await savesQuestionsCollection.insertOne(savesQuestions);
-    console.log(result);
     res.send(result);
 });
 app.get("/saves", async (req, res) => {
     const email = req.query.email;
-    // console.log(email)
     let query = {};
     if (email) {
         query = { email: email }
     }
-    console.log(query)
     const result = await savesQuestionsCollection.find(query).toArray();
-    // console.log(result)
     res.send(result);
-})
+});
+
+
 
 
 
