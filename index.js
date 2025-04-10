@@ -37,8 +37,8 @@ let blogCollection;
 
 async function run() {
     try {
-        await client.db("admin").command({ ping: 1 });
-        console.log("✅ Successfully connected to MongoDB!");
+        // await client.db("admin").command({ ping: 1 });
+        // console.log("✅ Successfully connected to MongoDB!");
         questionCollection = client.db("devDB").collection("questions");
         savesQuestionsCollection = client.db("devDB").collection("saveQuestions");
         blogCollection = client.db("devDB").collection("blogs");
@@ -49,16 +49,53 @@ async function run() {
 run();
 
 // Helper function for Gemini AI
+const aiResponseCache = new Map();
+
 const generateGeminiPrompt = async (promptText) => {
-    try {
-        const result = await model.generateContent(promptText);
-        const response = result.response;
-        return response.text();
-    } catch (err) {
-        console.error(`error ${err}`);
-        return "AI failed to generate response.";
+  // Check cache first
+  const cacheKey = promptText.substring(0, 100); // Use part of prompt as cache key
+  if (aiResponseCache.has(cacheKey)) {
+    return aiResponseCache.get(cacheKey);
+  }
+  
+  try {
+    const result = await model.generateContent(promptText);
+    const response = result.response;
+    const responseText = response.text();
+    
+    // Cache the result (limit cache size)
+    if (aiResponseCache.size > 100) {
+      // Remove oldest entry if cache is too large
+      const firstKey = aiResponseCache.keys().next().value;
+      aiResponseCache.delete(firstKey);
     }
+    aiResponseCache.set(cacheKey, responseText);
+    
+    return responseText;
+  } catch (err) {
+    console.error(`Error generating AI response: ${err}`);
+    return "AI failed to generate response due to an error.";
+  }
 };
+
+// Helper function to extract likely tag from error text
+function extractLikelyTag(errorText, commonTags) {
+  const lowerCaseError = errorText.toLowerCase();
+  for (const tag of commonTags) {
+    if (lowerCaseError.includes(tag)) {
+      return tag;
+    }
+  }
+  
+  // Look for common error patterns
+  if (lowerCaseError.includes("syntax")) return "syntax";
+  if (lowerCaseError.includes("undefined") || lowerCaseError.includes("null")) return "javascript";
+  if (lowerCaseError.includes("import") || lowerCaseError.includes("export")) return "javascript";
+  if (lowerCaseError.includes("component")) return "react";
+  if (lowerCaseError.includes("request") || lowerCaseError.includes("response")) return "api";
+  
+  return null;
+}
 
 // ✅ Root API
 app.get("/", (req, res) => {
@@ -246,45 +283,99 @@ app.post("/chat", async (req, res) => {
 // Error analyzer API
 app.post("/fixFlow", async (req, res) => {
     const { userInput, selectedOption } = req.body;
-  
-    const prompt = `This is the error: ${userInput}. What would be the most relevant tag (like 'react', 'security', 'nodejs', etc.) for this error? Only return one word.`;
-
-    const topic = await generateGeminiPrompt(prompt);
-    const cleanedTopic = topic.trim().toLowerCase(); 
+    
+    // Set a timeout for the entire request processing
+    const requestTimeout = setTimeout(() => {
+      res.status(504).json({ error: "Request timed out. Please try with a simpler error." });
+    }, 25000); // 25 seconds timeout
+    
     try {
-        if (selectedOption === "blog") {
-            const blogs = await blogCollection.find({
-                tags: {
-                    $elemMatch: {
-                        $regex: new RegExp(cleanedTopic, "i")
-                    }
-                }
-            }).toArray();
-            
-            return res.json({ type: "blog", topic, blogs });
-        }
-  
-        if (selectedOption === "question") {
-            const questions = await questionCollection.find({
-                tag: { $regex: cleanedTopic, $options: 'i' }
-            }).toArray();
-              
-            return res.json({ type: "question", questions });
-        }
-  
-        if (selectedOption === "ai_code") {
-            const fixPrompt = `A user encountered this error: "${userInput}". Can you provide a possible fix or improved version of the code with explanation?`;
-            const aiResponse = await generateGeminiPrompt(fixPrompt);
+      // Use a more efficient prompt - shorter and more direct
+      const tagPrompt = `Analyze this code error and return only one word that best describes the technology or framework related to this error: "${userInput.substring(0, 500)}"`; // Limit input size
       
-            return res.json({ type: "ai_code", aiResponse });
-        }
+      // Add timeout to Gemini API call
+      const topicPromise = Promise.race([
+        generateGeminiPrompt(tagPrompt),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("AI tag generation timed out")), 10000)
+        )
+      ]);
+      
+      let cleanedTopic;
+      try {
+        const topic = await topicPromise;
+        cleanedTopic = topic.trim().toLowerCase();
+      } catch (error) {
+        console.log("Tag generation timed out, using fallback method");
+        // Fallback: Extract likely tag from error text
+        const commonTags = ["react", "javascript", "nodejs", "python", "typescript", "html", "css", "mongodb", "sql", "api"];
+        cleanedTopic = extractLikelyTag(userInput, commonTags) || "error";
+      }
   
-        res.status(400).json({ error: "Invalid option selected" });
+      if (selectedOption === "blog") {
+        // Limit number of results and use efficient query
+        const blogs = await blogCollection
+          .find({
+            tags: { $regex: new RegExp(cleanedTopic, "i") }
+          })
+          .limit(5) // Only get top 5 results
+          .project({ title: 1, excerpt: 1, description: 1, createdAt: 1, author: 1 }) // Only get needed fields
+          .toArray();
+        
+        clearTimeout(requestTimeout);
+        return res.json({ type: "blog", topic: cleanedTopic, blogs });
+      }
+      
+      if (selectedOption === "question") {
+        // Limit number of results and use efficient query
+        const questions = await questionCollection
+          .find({
+            tag: { $regex: cleanedTopic, $options: 'i' }
+          })
+          .limit(5) // Only get top 5 results
+          .project({ title: 1, body: 1, date: 1, userName: 1, comments: { $slice: 0 }, votes: 1 }) // Only get needed fields
+          .toArray();
+        
+        clearTimeout(requestTimeout);
+        return res.json({ type: "question", questions });
+      }
+      
+      if (selectedOption === "ai_code") {
+        // Create a more focused prompt and limit input size to prevent long processing
+        const fixPrompt = `Fix this error (respond in under 500 words): "${userInput.substring(0, 1000)}"`;
+        
+        // Add timeout to AI response
+        const aiResponsePromise = Promise.race([
+          generateGeminiPrompt(fixPrompt),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("AI response generation timed out")), 15000)
+          )
+        ]);
+        
+        try {
+          const aiResponse = await aiResponsePromise;
+          clearTimeout(requestTimeout);
+          return res.json({ type: "ai_code", aiResponse });
+        } catch (error) {
+          console.log("AI fix generation timed out");
+          clearTimeout(requestTimeout);
+          return res.status(408).json({ 
+            error: "AI processing took too long. Please try with a simpler error.",
+            type: "ai_code",
+            aiResponse: "The error analysis timed out. Please try submitting a shorter or simpler error description."
+          });
+        }
+      }
+      
+      clearTimeout(requestTimeout);
+      res.status(400).json({ error: "Invalid option selected" });
     } catch (err) {
-        console.error("❌ Error in /fixFlow:", err);
-        res.status(500).json({ error: "Internal server error" });
+      clearTimeout(requestTimeout);
+      console.error("❌ Error in /fixFlow:", err);
+      res.status(500).json({ error: "Internal server error" });
     }
-});
+  });
+  
 
 // Blogs related APIs
 app.post('/blogs', async (req, res) => {
