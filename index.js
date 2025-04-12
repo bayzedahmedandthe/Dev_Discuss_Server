@@ -5,7 +5,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 3000;
 
 const systemTheme = process.env.SYSTEM_INFO;
 const genAI = new GoogleGenerativeAI(process.env.AI_SECRET_API_KEY);
@@ -14,7 +14,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstru
 // ✅ CORS Middleware
 app.use(
     cors({
-        origin: true,
+        origin: '*',
         credentials: true,
     })
 );
@@ -37,8 +37,6 @@ let blogCollection;
 
 async function run() {
     try {
-        // await client.db("admin").command({ ping: 1 });
-        // console.log("✅ Successfully connected to MongoDB!");
         questionCollection = client.db("devDB").collection("questions");
         savesQuestionsCollection = client.db("devDB").collection("saveQuestions");
         blogCollection = client.db("devDB").collection("blogs");
@@ -70,7 +68,6 @@ const generateGeminiPrompt = async (promptText) => {
       aiResponseCache.delete(firstKey);
     }
     aiResponseCache.set(cacheKey, responseText);
-    
     return responseText;
   } catch (err) {
     console.error(`Error generating AI response: ${err}`);
