@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -16,7 +17,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstru
 // ✅ CORS Middleware
 app.use(
     cors({
-        origin: ["http://localhost:5173", "https://dev-discuss-server-chi.vercel.app/"],
+        origin: true,
         credentials: true,
     })
 );
@@ -33,25 +34,27 @@ const client = new MongoClient(uri, {
     },
 });
 
-let questionCollection;
-let savesQuestionsCollection
 
 async function run() {
     try {
         await client.db("admin").command({ ping: 1 });
         console.log("✅ Successfully connected to MongoDB!");
-        questionCollection = client.db("devDB").collection("questions");
-        savesQuestionsCollection = client.db("devDB").collection("saveQuestions");
     } catch (error) {
         console.error("❌ MongoDB connection error:", error);
     }
 }
 run();
-
+        const questionCollection = client.db("devDB").collection("questions");
+        const blogCollection = client.db("devDB").collection("blogs");
 // ✅ GET All Questions
 app.get("/questions", async (req, res) => {
     try {
-        const questions = await questionCollection.find({}).sort({ _id: -1 }).toArray();
+        const questions = await questionCollection.find({}).toArray();
+
+        if (!questions.length) {
+            return res.status(404).send({ message: "No questions found" });
+        }
+
         res.send(questions);
     } catch (error) {
         res.status(500).send({ message: "Error fetching questions", error });
@@ -68,6 +71,22 @@ app.get("/questions/tag/:tag", async (req, res) => {
         res.status(500).send({ message: "Error fetching questions by tag", error });
     }
 });
+// gemini response 
+const generateGeminiPrompt = async(promptText)=>{
+try{
+const result = await model.generateContent(promptText)
+const response = result.response
+return response.text()
+}catch(err){
+console.error(`error ${err}`)
+return "AI failed to generate response.";
+}
+}
+// Error analyzer
+app.post("/fixFlow", async (req, res) => {
+    const { userInput, selectedOption } = req.body;
+  
+    const prompt = `This is the error: ${userInput}. What would be the most relevant tag (like 'react', 'security', 'nodejs', etc.) for this error? Only return one word.`;})
 
 
 // Ai Assistance api 
@@ -123,8 +142,16 @@ app.post("/questions", async (req, res) => {
         res.status(500).send({ error: "Error adding question" });
     }
 });
-
-
+// blogs post 
+app.post('/blogs',async(req,res)=>{
+    const blog = req.body
+    const result = await blogCollection.insertOne(blog)
+    res.send(result)
+})
+app.get('/blogs',async(req,res)=>{
+    const blogs = await blogCollection.find().toArray()
+    res.send(blogs)
+})
 // ✅ GET Tags with Counts
 app.get("/tags", async (req, res) => {
     try {
