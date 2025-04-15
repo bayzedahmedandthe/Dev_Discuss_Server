@@ -235,6 +235,46 @@ app.get("/userQuestions", async (req, res) => {
     }
 });
 
+app.delete("/userQuestions/:id", async (req, res) => {
+    try {
+        const id = req.params.id;
+        const email = req.query.email;
+
+        // Check if id and email are present
+        if (!id || !email) {
+            return res.status(400).send({ error: "Email or ID missing" });
+        }
+
+        // Check if the ID is a valid ObjectId
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).send({ error: "Invalid ID format" });
+        }
+
+        const query = {
+            userEmail: email,
+            _id: new ObjectId(id)
+        };
+
+        console.log("Trying to delete:", query);
+
+        const result = await questionCollection.deleteOne(query);
+
+        if (result.deletedCount === 0) {
+            return res.status(404).send({ message: "No matching document found to delete." });
+        }
+
+        res.send({
+            message: "Successfully deleted the question.",
+            result
+        });
+
+    } catch (error) {
+        console.error("Delete error:", error);
+        res.status(500).send({ error: "Error deleting user question" });
+    }
+});
+
+
 // Saves questions related apis
 app.post("/saves", async (req, res) => {
     try {
@@ -263,9 +303,9 @@ app.get("/saves", async (req, res) => {
 // Save question delete related APIs
 app.delete("/saves/:id", async (req, res) => {
     const id = req.params.id;
-    const query = { questionID: id}
-        const result = await savesQuestionsCollection.deleteOne(query);
-        res.send(result);
+    const query = { questionID: id }
+    const result = await savesQuestionsCollection.deleteOne(query);
+    res.send(result);
 
 });
 
