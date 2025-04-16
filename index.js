@@ -35,6 +35,8 @@ const client = new MongoClient(uri, {
 let questionCollection;
 let savesQuestionsCollection;
 let blogCollection;
+let problemCollection;
+
 
 async function run() {
     try {
@@ -43,12 +45,16 @@ async function run() {
         questionCollection = client.db("devDB").collection("questions");
         savesQuestionsCollection = client.db("devDB").collection("saveQuestions");
         blogCollection = client.db("devDB").collection("blogs");
+        problemCollection= client.db('devDB').collection('problems')
+        
     } catch (error) {
         console.error("❌ MongoDB connection error:", error);
     }
 }
 run();
-
+        const problemProgressCollection = client.db('devDB').collection('problemProgress')
+        const shortQuestionCollection = client.db('devDB').collection('shortQuestions')
+        const shortQuestionProgressCollection = client.db('devDB').collection('shortQProgress')
 // Helper function for Gemini AI
 const aiResponseCache = new Map();
 
@@ -300,6 +306,92 @@ app.get("/saves", async (req, res) => {
         res.status(500).send({ error: "Error fetching saved questions" });
     }
 });
+
+// Event related APi 
+// short question event related apis
+
+app.get('/shortQ',async(req,res)=>{
+  const email = req.query.email
+ const filter = {email}
+ let currentSolveIndex = 0;
+  const isUserProgressExist = await shortQuestionProgressCollection.findOne(filter)
+  if(!isUserProgressExist){
+    const insertProgress={
+      email,
+      answerQuestion:[],
+      currentSolveIndex:0,
+      totalScore:0
+    }
+    await shortQuestionProgressCollection.insertOne(insertProgress)
+  }else{
+currentSolveIndex += isUserProgressExist.currentSolveIndex
+  }
+  const totalQuestion = await shortQuestionCollection.estimatedDocumentCount()
+  const result = await shortQuestionCollection.find().toArray()
+  res.send({result,totalQuestion,currentSolveIndex})
+})
+app.post('/shortQ/:id',async(req,res)=>{
+  const id = req.params.id;
+  const {email,question,answer}=req.body;
+  const filter = { email };
+  const isQuestionSolved = await shortQuestionProgressCollection.findOne(filter);
+  
+  if (isQuestionSolved && isQuestionSolved.answerQuestion && 
+      isQuestionSolved.answerQuestion.some(problemId => String(problemId) === String(id))) {
+      return res.send({ message: "You already finished this problem!" });
+  }
+
+  const feedbackFromGemini = await generateGeminiPrompt(
+    `Be honest and strict. Read the Question and answer properly, then rate the answer from 0 to 10. Just mention the number. This is the question: ${question} and this is the answer: ${answer}`
+);
+
+const score = parseInt(feedbackFromGemini);
+
+const updateDoc = {
+    $push: { answerQuestion: id },
+    $inc: {
+       currentSolveIndex: 1,
+        totalScore: score,
+    },
+};
+
+const data = await shortQuestionProgressCollection.updateOne(filter, updateDoc);
+
+res.send({
+    message: `🎉 Congratulation! Your progress is uploaded. Your score for this task is ${score}`,
+});
+
+})
+// get single short question
+app.get('/shortQ/:id',async(req,res)=>{
+  const id = req.params.id
+  const filter = {_id: new ObjectId(id)}
+  const result = await shortQuestionCollection.findOne(filter)
+  res.send(result)
+})
+// get all problems based on user
+ app.get('/problems',async(req,res)=>{ 
+    const email = req.query.email 
+    const filter = {email}  
+    let currentProblemIndex =0;    
+     const userProgressIsExist = await problemProgressCollection.findOne(filter)
+     if(!userProgressIsExist){
+        const insertProgress = {
+            email : email,
+            solvedProblem:[],
+            currentProblemIndex:0,
+            totalScore:0
+        }
+        await problemProgressCollection.insertOne(insertProgress)
+     }else{
+     currentProblemIndex +=userProgressIsExist.currentProblemIndex
+     }
+
+    const result = await problemCollection.find().toArray()
+    res.send({result,currentProblemIndex})
+})
+
+
 // Save question delete related APIs
 app.delete("/saves/:id", async (req, res) => {
     const id = req.params.id;
@@ -309,6 +401,52 @@ app.delete("/saves/:id", async (req, res) => {
 
 });
 
+
+
+//  markDown problem solve via gemini
+app.post('/problemProgress/:id', async (req, res) => {
+  const id = req.params.id;
+  const { problemDes, userCode, email } = req.body;
+  const filter = { email };
+  
+  const isProblemSolved = await problemProgressCollection.findOne(filter);
+
+  
+  // Fix the comparison by using String() or toString() for consistent comparison
+  if (isProblemSolved && isProblemSolved.solvedProblem && 
+      isProblemSolved.solvedProblem.some(problemId => String(problemId) === String(id))) {
+      return res.send({ message: "You already finished this problem!" });
+  }
+  
+
+  const feedbackFromGemini = await generateGeminiPrompt(
+      `Be honest and strict. Read the problem and code properly, then rate the code from 0 to 10. Just mention the number. This is the problem: ${problemDes} and this is the code: ${userCode}`
+  );
+  
+  const score = parseInt(feedbackFromGemini);
+  
+  const updateDoc = {
+      $push: { solvedProblem: id },
+      $inc: {
+          currentProblemIndex: 1,
+          totalScore: score,
+      },
+  };
+  
+  await problemProgressCollection.updateOne(filter, updateDoc);
+  
+  res.send({
+      message: `🎉 Congratulation! Your progress is uploaded. Your score for this task is ${score}`,
+  });
+});
+  
+// get single Problem
+app.get('/problem/:id',async(req,res)=>{
+    const id = req.params.id
+    const filter = {_id : new ObjectId(id)}
+    const result = await problemCollection.findOne(filter)
+    res.send(result)
+})
 // AI Chat API
 const chat = model.startChat({ history: [] });
 
