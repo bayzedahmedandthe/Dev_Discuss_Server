@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 5000;
+require('dotenv').config()
+
 
 // Middlewares
 app.use(cors());
@@ -23,8 +25,31 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
 
+        const database = client.db("Dev_Discuss")
+        const blogsCollection = database.collection("Blogs")
 
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        app.get("/", (req, res) => {
+            res.send("Dev Discuss Server is running now")
+        });
+        app.get("/screet", (req, res) => {
+            res.send("questions")
+        });
+
+
+
+        // app.get("/blogs",async(req,res)=>{
+        //     const query={}
+        //     const result=await blogsCollection.find(query).toArray()
+        //     res.send(result)
+        // });
+
+        app.post("/blogs", async (req, res) => {
+            const blogs = req.body;
+            const result = await blogsCollection.insertOne(blogs);
+            res.send(result)
+        })
+
+        console.log("Pinged you have successfully connected");
     } finally {
 
     }
@@ -32,9 +57,7 @@ async function run() {
 run().catch(console.dir);
 
 
-app.get("/", (req, res) => {
-    res.send("Dev Discuss Server is running now")
-});
+
 app.listen(port, () => {
     console.log(`Dev Discuss Server is running on port ${port}`);
 });
