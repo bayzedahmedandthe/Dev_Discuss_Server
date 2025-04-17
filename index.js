@@ -475,5 +475,3 @@ app.get('/blogs', async (req, res) => {
 app.listen(port, () => {
     console.log(`🚀 Dev Discuss Server is running on port ${port}`);
 });
-
-
