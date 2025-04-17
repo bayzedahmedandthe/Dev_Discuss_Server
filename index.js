@@ -255,20 +255,15 @@ app.delete("/userQuestions/:id", async (req, res) => {
         if (!ObjectId.isValid(id)) {
             return res.status(400).send({ error: "Invalid ID format" });
         }
-
         const query = {
             userEmail: email,
             _id: new ObjectId(id)
         };
-
-        console.log("Trying to delete:", query);
-
         const result = await questionCollection.deleteOne(query);
 
         if (result.deletedCount === 0) {
             return res.status(404).send({ message: "No matching document found to delete." });
         }
-
         res.send({
             message: "Successfully deleted the question.",
             result
@@ -279,6 +274,31 @@ app.delete("/userQuestions/:id", async (req, res) => {
         res.status(500).send({ error: "Error deleting user question" });
     }
 });
+
+app.post('/questions/:id/like', async (req, res) => {
+    const { id } = req.params;
+    const { userEmail } = req.body;
+
+    const question = await questionCollection.findOne({ _id: new ObjectId(id) });
+
+    if (!question) return res.status(404).send({ message: "Question not found" });
+
+    let updatedLikes;
+
+    if (question.likes?.includes(userEmail)) {
+        updatedLikes = question.likes.filter(email => email !== userEmail);
+    } else {
+        updatedLikes = [...(question.likes || []), userEmail];
+    }
+
+    await questionCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { likes: updatedLikes } }
+    );
+
+    res.send({ likes: updatedLikes });
+});
+
 
 
 // Saves questions related apis
@@ -593,3 +613,5 @@ app.get('/blogs', async (req, res) => {
 app.listen(port, () => {
     console.log(`🚀 Dev Discuss Server is running on port ${port}`);
 });
+
+
