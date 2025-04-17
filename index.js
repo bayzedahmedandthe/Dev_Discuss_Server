@@ -587,8 +587,6 @@ app.post("/fixFlow", async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 });
-
-
 // Blogs related APIs
 app.post('/blogs', async (req, res) => {
     try {
