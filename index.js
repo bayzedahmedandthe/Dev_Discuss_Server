@@ -607,6 +607,19 @@ app.get('/blogs', async (req, res) => {
     }
 });
 
+app.get("/blogs/:id", async (req, res) => {
+    const { id } = req.params;
+    try {
+      const blog = await blogCollection.findOne({ _id: new ObjectId(id) });
+      if (!blog) {
+        return res.status(404).json({ message: "Blog not found" });
+      }
+      res.send(blog);
+    } catch (error) {
+      res.status(500).json({ message: "Something went wrong", error });
+    }
+  });
+
 // ✅ Start Server
 app.listen(port, () => {
     console.log(`🚀 Dev Discuss Server is running on port ${port}`);
