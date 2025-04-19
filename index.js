@@ -35,8 +35,7 @@ async function run() {
             res.send("questions")
         });
 
-
-
+    
         // app.get("/blogs",async(req,res)=>{
         //     const query={}
         //     const result=await blogsCollection.find(query).toArray()
