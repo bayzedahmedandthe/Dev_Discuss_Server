@@ -32,23 +32,31 @@ const client = new MongoClient(uri, {
     },
 });
 
+let usersCollection;
 let questionCollection;
 let savesQuestionsCollection;
 let blogCollection;
+let problemCollection;
+
 
 async function run() {
     try {
         // await client.db("admin").command({ ping: 1 });
         // console.log("✅ Successfully connected to MongoDB!");
+        usersCollection = client.db("devDB").collection("users");
         questionCollection = client.db("devDB").collection("questions");
         savesQuestionsCollection = client.db("devDB").collection("saveQuestions");
         blogCollection = client.db("devDB").collection("blogs");
+        problemCollection = client.db('devDB').collection('problems');
+
     } catch (error) {
         console.error("❌ MongoDB connection error:", error);
     }
 }
 run();
-
+const problemProgressCollection = client.db('devDB').collection('problemProgress')
+const shortQuestionCollection = client.db('devDB').collection('shortQuestions')
+const shortQuestionProgressCollection = client.db('devDB').collection('shortQProgress')
 // Helper function for Gemini AI
 const aiResponseCache = new Map();
 
@@ -103,6 +111,57 @@ app.get("/", (req, res) => {
     res.send("🚀 Dev Discuss Server is running now on vercel.");
 });
 
+// All users
+app.post("/users", async (req, res) => {
+    const user = req.body;
+    const existingUser = await usersCollection.findOne({ email: user.userEmail });
+    if (existingUser) {
+        return res.status(200).send({ message: "User already exists!" });
+    }
+    const result = await usersCollection.insertOne(user);
+    res.send(result);
+});
+// ✅ GET User Profile by Email
+app.get('/users', async (req, res) => {
+    const email = req.query.email;
+    let query = {};
+    if (email) {
+        query = { userEmail: email };
+    }
+    const result = await usersCollection.findOne(query);
+    res.send(result)
+});
+app.get('/users/points-breakdown', async (req, res) => {
+    const email = req.query.email;
+
+    try {
+        const user = await usersCollection.findOne({ userEmail: email });
+
+        if (!user) {
+            return res.status(404).send({ error: "User not found" });
+        }
+
+        const pointsBreakdown = user.pointsBreakdown || { comments: 0, likes: 0, login: 0, questions: 0 };
+        const totalPoints = pointsBreakdown.comments + pointsBreakdown.likes + pointsBreakdown.login + pointsBreakdown.questions;
+
+        console.log("Fetched Points Breakdown from DB:", pointsBreakdown);  // কনসোল লগ
+        console.log("Total Points:", totalPoints);  // কনসোল লগ
+
+        res.status(200).send({
+            userName: user.userName,
+            pointsBreakdown,  // pointsBreakdown সঠিকভাবে পাঠানো হচ্ছে
+            totalPoints,  // মোট পয়েন্ট
+        });
+    } catch (error) {
+        console.error("Error fetching user points breakdown:", error);
+        res.status(500).send({ error: "Error fetching user points breakdown" });
+    }
+});
+
+
+
+
+
 // ✅ GET All Questions
 app.get("/questions", async (req, res) => {
     try {
@@ -151,13 +210,67 @@ app.get("/questions/:id", async (req, res) => {
 // ✅ POST New Question
 app.post("/questions", async (req, res) => {
     try {
-        const newQuestion = { ...req.body, votes: 0, comments: [] };
+        const { userId, ...rest } = req.body;
+
+        if (!userId || !ObjectId.isValid(userId)) {
+            return res.status(400).send({ error: "Invalid or missing user ID" });
+        }
+
+        const newQuestion = {
+            ...rest,
+            votes: 0,
+            comments: [],
+            createdAt: new Date().toISOString()
+        };
+
         const result = await questionCollection.insertOne(newQuestion);
+
+        const user = await usersCollection.findOne({ _id: new ObjectId(userId) });
+
+        if (!user) {
+            return res.status(404).send({ error: "User not found" });
+        }
+
+        // pointsBreakdown না থাকলে initialize করি
+        if (!user.pointsBreakdown) {
+            await usersCollection.updateOne(
+                { _id: new ObjectId(userId) },
+                {
+                    $set: {
+                        pointsBreakdown: {
+                            comments: 0,
+                            likes: 0,
+                            login: 0,
+                            questions: 0
+                        }
+                    }
+                }
+            );
+        }
+
+        // পয়েন্ট ও breakdown update
+        const userResult = await usersCollection.updateOne(
+            { _id: new ObjectId(userId) },
+            {
+                $inc: {
+                    points: 3,
+                    "pointsBreakdown.questions": 3
+                }
+            }
+        );
+
+        if (userResult.modifiedCount === 0) {
+            return res.status(400).send({ error: "Points update failed" });
+        }
+
         res.status(201).send(result);
     } catch (error) {
+        console.error("Error adding question:", error);
         res.status(500).send({ error: "Error adding question" });
     }
 });
+
+
 
 // ✅ GET Tags with Counts
 app.get("/tags", async (req, res) => {
@@ -191,19 +304,18 @@ app.post("/questions/comments/:id", async (req, res) => {
             return res.status(400).send({ error: "Invalid question ID format" });
         }
 
-        const { text, userName, photoURL } = req.body;
+        const { text, userName, photoURL, userId } = req.body;
 
-        if (!text || !userName) {
-            return res.status(400).send({ error: "Text and userName are required" });
+        if (!text || !userName || !userId) {
+            return res.status(400).send({ error: "Text, userName, and userId are required" });
         }
 
         const newComment = {
             text,
             userName,
-            photoURL: photoURL || "", // Default empty string if no photo is provided
-            createdAt: new Date().toISOString(), // Standard date format
+            photoURL: photoURL || "",
+            createdAt: new Date().toISOString(),
         };
-
         const result = await questionCollection.updateOne(
             { _id: new ObjectId(id) },
             { $push: { comments: newComment } }
@@ -212,13 +324,54 @@ app.post("/questions/comments/:id", async (req, res) => {
         if (result.modifiedCount === 0) {
             return res.status(500).send({ error: "Comment could not be added" });
         }
+        const user = await usersCollection.findOne({ _id: new ObjectId(userId) });
 
-        res.status(201).send(newComment);
+        if (!user) {
+            return res.status(404).send({ error: "User not found" });
+        }
+        if (!user.pointsBreakdown) {
+            await usersCollection.updateOne(
+                { _id: new ObjectId(userId) },
+                {
+                    $set: {
+                        pointsBreakdown: {
+                            comments: 0,
+                            likes: 0,
+                            login: 0,
+                            questions: 0
+                        }
+                    }
+                }
+            );
+        }
+        const userResult = await usersCollection.updateOne(
+            { _id: new ObjectId(userId) },
+            {
+                $inc: {
+                    points: 2,
+                    "pointsBreakdown.comments": 2
+                }
+            }
+        );
+
+        console.log("userResult", userResult);
+        console.log("userId", userId);
+
+        if (userResult.modifiedCount > 0) {
+            return res.status(201).send(newComment);
+        } else {
+            return res.status(400).send({ error: "User points update failed" });
+        }
+
     } catch (error) {
         console.error("Error adding comment:", error);
         res.status(500).send({ error: "Error adding comment" });
     }
 });
+
+
+
+
 
 // get single user question
 app.get("/userQuestions", async (req, res) => {
@@ -271,18 +424,28 @@ app.delete("/userQuestions/:id", async (req, res) => {
 
 app.post('/questions/:id/like', async (req, res) => {
     const { id } = req.params;
-    const { userEmail } = req.body;
+    const { userEmail, userId } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+        return res.status(400).send({ error: "Invalid question ID" });
+    }
+
+    if (!ObjectId.isValid(userId)) {
+        return res.status(400).send({ error: "Invalid user ID" });
+    }
 
     const question = await questionCollection.findOne({ _id: new ObjectId(id) });
 
     if (!question) return res.status(404).send({ message: "Question not found" });
 
     let updatedLikes;
+    let liked = false;
 
     if (question.likes?.includes(userEmail)) {
         updatedLikes = question.likes.filter(email => email !== userEmail);
     } else {
         updatedLikes = [...(question.likes || []), userEmail];
+        liked = true;
     }
 
     await questionCollection.updateOne(
@@ -290,8 +453,46 @@ app.post('/questions/:id/like', async (req, res) => {
         { $set: { likes: updatedLikes } }
     );
 
+    if (liked) {
+        const user = await usersCollection.findOne({ _id: new ObjectId(userId) });
+
+        if (!user) {
+            return res.status(404).send({ error: "User not found" });
+        }
+        if (!user.pointsBreakdown) {
+            await usersCollection.updateOne(
+                { _id: new ObjectId(userId) },
+                {
+                    $set: {
+                        pointsBreakdown: {
+                            comments: 0,
+                            likes: 0,
+                            login: 0,
+                            questions: 0
+                        }
+                    }
+                }
+            );
+        }
+        const userResult = await usersCollection.updateOne(
+            { _id: new ObjectId(userId) },
+            {
+                $inc: {
+                    points: 1,
+                    "pointsBreakdown.likes": 1
+                }
+            }
+        );
+
+        if (userResult.modifiedCount === 0) {
+            return res.status(400).send({ error: "User points update failed" });
+        }
+    }
+
     res.send({ likes: updatedLikes });
 });
+
+
 
 
 
@@ -320,6 +521,92 @@ app.get("/saves", async (req, res) => {
         res.status(500).send({ error: "Error fetching saved questions" });
     }
 });
+
+// Event related APi 
+// short question event related apis
+
+app.get('/shortQ', async (req, res) => {
+    const email = req.query.email
+    const filter = { email }
+    let currentSolveIndex = 0;
+    const isUserProgressExist = await shortQuestionProgressCollection.findOne(filter)
+    if (!isUserProgressExist) {
+        const insertProgress = {
+            email,
+            answerQuestion: [],
+            currentSolveIndex: 0,
+            totalScore: 0
+        }
+        await shortQuestionProgressCollection.insertOne(insertProgress)
+    } else {
+        currentSolveIndex += isUserProgressExist.currentSolveIndex
+    }
+    const totalQuestion = await shortQuestionCollection.estimatedDocumentCount()
+    const result = await shortQuestionCollection.find().toArray()
+    res.send({ result, totalQuestion, currentSolveIndex })
+})
+app.post('/shortQ/:id', async (req, res) => {
+    const id = req.params.id;
+    const { email, question, answer } = req.body;
+    const filter = { email };
+    const isQuestionSolved = await shortQuestionProgressCollection.findOne(filter);
+
+    if (isQuestionSolved && isQuestionSolved.answerQuestion &&
+        isQuestionSolved.answerQuestion.some(problemId => String(problemId) === String(id))) {
+        return res.send({ message: "You already finished this problem!" });
+    }
+
+    const feedbackFromGemini = await generateGeminiPrompt(
+        `Be honest and strict. Read the Question and answer properly, then rate the answer from 0 to 10. Just mention the number. This is the question: ${question} and this is the answer: ${answer}`
+    );
+
+    const score = parseInt(feedbackFromGemini);
+
+    const updateDoc = {
+        $push: { answerQuestion: id },
+        $inc: {
+            currentSolveIndex: 1,
+            totalScore: score,
+        },
+    };
+
+    const data = await shortQuestionProgressCollection.updateOne(filter, updateDoc);
+
+    res.send({
+        message: `🎉 Congratulation! Your progress is uploaded. Your score for this task is ${score}`,
+    });
+
+})
+// get single short question
+app.get('/shortQ/:id', async (req, res) => {
+    const id = req.params.id
+    const filter = { _id: new ObjectId(id) }
+    const result = await shortQuestionCollection.findOne(filter)
+    res.send(result)
+})
+// get all problems based on user
+app.get('/problems', async (req, res) => {
+    const email = req.query.email
+    const filter = { email }
+    let currentProblemIndex = 0;
+    const userProgressIsExist = await problemProgressCollection.findOne(filter)
+    if (!userProgressIsExist) {
+        const insertProgress = {
+            email: email,
+            solvedProblem: [],
+            currentProblemIndex: 0,
+            totalScore: 0
+        }
+        await problemProgressCollection.insertOne(insertProgress)
+    } else {
+        currentProblemIndex += userProgressIsExist.currentProblemIndex
+    }
+
+    const result = await problemCollection.find().toArray()
+    res.send({ result, currentProblemIndex })
+})
+
+
 // Save question delete related APIs
 app.delete("/saves/:id", async (req, res) => {
     const id = req.params.id;
@@ -329,6 +616,52 @@ app.delete("/saves/:id", async (req, res) => {
 
 });
 
+
+
+//  markDown problem solve via gemini
+app.post('/problemProgress/:id', async (req, res) => {
+    const id = req.params.id;
+    const { problemDes, userCode, email } = req.body;
+    const filter = { email };
+
+    const isProblemSolved = await problemProgressCollection.findOne(filter);
+
+
+    // Fix the comparison by using String() or toString() for consistent comparison
+    if (isProblemSolved && isProblemSolved.solvedProblem &&
+        isProblemSolved.solvedProblem.some(problemId => String(problemId) === String(id))) {
+        return res.send({ message: "You already finished this problem!" });
+    }
+
+
+    const feedbackFromGemini = await generateGeminiPrompt(
+        `Be honest and strict. Read the problem and code properly, then rate the code from 0 to 10. Just mention the number. This is the problem: ${problemDes} and this is the code: ${userCode}`
+    );
+
+    const score = parseInt(feedbackFromGemini);
+
+    const updateDoc = {
+        $push: { solvedProblem: id },
+        $inc: {
+            currentProblemIndex: 1,
+            totalScore: score,
+        },
+    };
+
+    await problemProgressCollection.updateOne(filter, updateDoc);
+
+    res.send({
+        message: `🎉 Congratulation! Your progress is uploaded. Your score for this task is ${score}`,
+    });
+});
+
+// get single Problem
+app.get('/problem/:id', async (req, res) => {
+    const id = req.params.id
+    const filter = { _id: new ObjectId(id) }
+    const result = await problemCollection.findOne(filter)
+    res.send(result)
+})
 // AI Chat API
 const chat = model.startChat({ history: [] });
 
