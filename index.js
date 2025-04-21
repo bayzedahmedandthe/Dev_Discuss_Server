@@ -117,23 +117,27 @@ app.get("/", (req, res) => {
 // All users
 app.post("/users", async (req, res) => {
     const user = req.body;
-    const existingUser = await usersCollection.findOne({ email: user.userEmail });
+    const existingUser = await usersCollection.findOne({ userEmail: user.userEmail });
     if (existingUser) {
         return res.status(200).send({ message: "User already exists!" });
     }
     const result = await usersCollection.insertOne(user);
     res.send(result);
 });
-// ✅ GET User Profile by Email
+
+
 app.get('/users', async (req, res) => {
     const email = req.query.email;
-    let query = {};
-    if (email) {
-        query = { userEmail: email };
-    }
+    const query = email ? { userEmail: email } : {};
     const result = await usersCollection.findOne(query);
     res.send(result)
 });
+
+app.get("/userAll", async (req, res) => {
+    const users = await usersCollection.find().toArray();
+    res.json(users); // ✅ This is safe
+  });
+
 app.get('/users/points-breakdown', async (req, res) => {
     const email = req.query.email;
 
@@ -852,6 +856,7 @@ app.get("/events/:id", async (req, res) => {
     res.status(500).send("Server error");
   }
 });
+
 
 // ✅ Start Server
 app.listen(port, () => {
