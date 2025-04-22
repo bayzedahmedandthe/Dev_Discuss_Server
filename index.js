@@ -109,12 +109,10 @@ function extractLikelyTag(errorText, commonTags) {
     return null;
 }
 
-// ✅ Root API
 app.get("/", (req, res) => {
     res.send("🚀 Dev Discuss Server is running now on vercel.");
 });
 
-// All users
 app.post("/users", async (req, res) => {
     const user = req.body;
     const existingUser = await usersCollection.findOne({ userEmail: user.userEmail });
