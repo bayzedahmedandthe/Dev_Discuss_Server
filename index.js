@@ -4,7 +4,7 @@ const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 5000;
 
 const systemTheme = process.env.SYSTEM_INFO;
 const genAI = new GoogleGenerativeAI(process.env.AI_SECRET_API_KEY);
@@ -47,10 +47,9 @@ async function run() {
         questionCollection = client.db("devDB").collection("questions");
         savesQuestionsCollection = client.db("devDB").collection("saveQuestions");
         blogCollection = client.db("devDB").collection("blogs");
-        problemCollection= client.db('devDB').collection('problems');
-        eventCollection= client.db('devDB').collection('events');
+        problemCollection = client.db('devDB').collection('problems');
+        eventCollection = client.db('devDB').collection('events');
 
-        
 
     } catch (error) {
         console.error("❌ MongoDB connection error:", error);
@@ -116,12 +115,25 @@ app.get("/", (req, res) => {
 app.post("/users", async (req, res) => {
     const user = req.body;
     const existingUser = await usersCollection.findOne({ userEmail: user.userEmail });
+  
     if (existingUser) {
-        return res.status(200).send({ message: "User already exists!" });
+      const result = await usersCollection.updateOne(
+        { userEmail: user.userEmail },
+        {
+          $set: {
+            userName: user.userName,
+            photo: user.photo
+          }
+        }
+      );
+      return res.status(200).send({ message: "User updated", result });
     }
+  
     const result = await usersCollection.insertOne(user);
     res.send(result);
-});
+    console.log(result);
+  });
+  
 
 
 app.get('/users', async (req, res) => {
@@ -130,12 +142,11 @@ app.get('/users', async (req, res) => {
     const result = await usersCollection.findOne(query);
     res.send(result)
 });
-
-app.get("/userAll", async (req, res) => {
-    const users = await usersCollection.find().toArray();
-    res.json(users); // ✅ This is safe
-  });
-
+app.get('/usersAll', async (req, res) => {
+    const result = await usersCollection.find().toArray();
+    res.send(result)
+});
+  
 app.get('/users/points-breakdown', async (req, res) => {
     const email = req.query.email;
 
@@ -810,49 +821,49 @@ app.get('/blogs', async (req, res) => {
 app.get("/blogs/:id", async (req, res) => {
     const { id } = req.params;
     try {
-      const blog = await blogCollection.findOne({ _id: new ObjectId(id) });
-      if (!blog) {
-        return res.status(404).json({ message: "Blog not found" });
-      }
-      res.send(blog);
+        const blog = await blogCollection.findOne({ _id: new ObjectId(id) });
+        if (!blog) {
+            return res.status(404).json({ message: "Blog not found" });
+        }
+        res.send(blog);
     } catch (error) {
-      res.status(500).json({ message: "Something went wrong", error });
+        res.status(500).json({ message: "Something went wrong", error });
     }
-  });
+});
 
-  // server.js or routes/events.js
+// server.js or routes/events.js
 app.post("/events", async (req, res) => {
     const newEvent = req.body;
     try {
-      const result = await eventCollection.insertOne(newEvent);
-      res.status(201).send(result);
+        const result = await eventCollection.insertOne(newEvent);
+        res.status(201).send(result);
     } catch (error) {
-      console.error("Error adding event:", error);
-      res.status(500).send("Failed to add event");
+        console.error("Error adding event:", error);
+        res.status(500).send("Failed to add event");
     }
-  });
+});
 
-  app.get("/events", async (req, res) => {
+app.get("/events", async (req, res) => {
     try {
-      const events = await eventCollection.find().toArray();
-      res.status(200).send(events);
+        const events = await eventCollection.find().toArray();
+        res.status(200).send(events);
     } catch (error) {
-      console.error("Error fetching events:", error);
-      res.status(500).send("Failed to fetch events");
+        console.error("Error fetching events:", error);
+        res.status(500).send("Failed to fetch events");
     }
-  });
+});
 
 app.get("/events/:id", async (req, res) => {
-  const { id } = req.params;
+    const { id } = req.params;
 
-  try {
-    const event = await eventCollection.findOne({ _id: new ObjectId(id) });
-    if (!event) return res.status(404).send("Event not found");
-    res.send(event);
-  } catch (error) {
-    console.error("Error fetching event by ID:", error);
-    res.status(500).send("Server error");
-  }
+    try {
+        const event = await eventCollection.findOne({ _id: new ObjectId(id) });
+        if (!event) return res.status(404).send("Event not found");
+        res.send(event);
+    } catch (error) {
+        console.error("Error fetching event by ID:", error);
+        res.status(500).send("Server error");
+    }
 });
 
 
