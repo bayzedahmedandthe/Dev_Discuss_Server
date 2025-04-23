@@ -3,7 +3,6 @@ const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -37,6 +36,7 @@ let questionCollection;
 let savesQuestionsCollection;
 let blogCollection;
 let problemCollection;
+let eventCollection;
 
 
 async function run() {
@@ -47,8 +47,10 @@ async function run() {
         questionCollection = client.db("devDB").collection("questions");
         savesQuestionsCollection = client.db("devDB").collection("saveQuestions");
         blogCollection = client.db("devDB").collection("blogs");
-        problemCollection = client.db('devDB').collection('problems');
+        problemCollection= client.db('devDB').collection('problems');
+        eventCollection= client.db('devDB').collection('events');
 
+        
     } catch (error) {
         console.error("❌ MongoDB connection error:", error);
     }
@@ -782,8 +784,6 @@ app.post("/fixFlow", async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 });
-
-
 // Blogs related APIs
 app.post('/blogs', async (req, res) => {
     try {
@@ -802,6 +802,54 @@ app.get('/blogs', async (req, res) => {
     } catch (error) {
         res.status(500).send({ error: "Error fetching blogs" });
     }
+});
+
+app.get("/blogs/:id", async (req, res) => {
+    const { id } = req.params;
+    try {
+      const blog = await blogCollection.findOne({ _id: new ObjectId(id) });
+      if (!blog) {
+        return res.status(404).json({ message: "Blog not found" });
+      }
+      res.send(blog);
+    } catch (error) {
+      res.status(500).json({ message: "Something went wrong", error });
+    }
+  });
+
+  // server.js or routes/events.js
+app.post("/events", async (req, res) => {
+    const newEvent = req.body;
+    try {
+      const result = await eventCollection.insertOne(newEvent);
+      res.status(201).send(result);
+    } catch (error) {
+      console.error("Error adding event:", error);
+      res.status(500).send("Failed to add event");
+    }
+  });
+
+  app.get("/events", async (req, res) => {
+    try {
+      const events = await eventCollection.find().toArray();
+      res.status(200).send(events);
+    } catch (error) {
+      console.error("Error fetching events:", error);
+      res.status(500).send("Failed to fetch events");
+    }
+  });
+
+app.get("/events/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const event = await eventCollection.findOne({ _id: new ObjectId(id) });
+    if (!event) return res.status(404).send("Event not found");
+    res.send(event);
+  } catch (error) {
+    console.error("Error fetching event by ID:", error);
+    res.status(500).send("Server error");
+  }
 });
 
 // ✅ Start Server
