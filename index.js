@@ -146,6 +146,30 @@ app.get('/usersAll', async (req, res) => {
     const result = await usersCollection.find().toArray();
     res.send(result)
 });
+
+app.get("/leaderboard", async (req, res) => {
+    try {
+      const { email } = req.query; // Logged-in user এর email
+  
+      const allUsers = await usersCollection
+        .find({}, { projection: { email: 1, userEmail: 1, userName: 1, photo: 1, points: 1 } })
+        .sort({ points: -1 })
+        .toArray();
+  
+      const topUsers = allUsers.slice(0, 10); // Top 10 users
+      const userIndex = allUsers.findIndex(user => user.email === email || user.userEmail === email);
+      const currentUser = userIndex !== -1 ? {
+        ...allUsers[userIndex],
+        rank: userIndex + 1, 
+      } : null;
+  
+      res.send({ topUsers, currentUser, totalUsers: allUsers.length });
+    } catch (error) {
+      console.error("Leaderboard fetch error:", error);
+      res.status(500).send({ message: "Internal server error" });
+    }
+  });
+  
   
 app.get('/users/points-breakdown', async (req, res) => {
     const email = req.query.email;
@@ -160,13 +184,10 @@ app.get('/users/points-breakdown', async (req, res) => {
         const pointsBreakdown = user.pointsBreakdown || { comments: 0, likes: 0, login: 0, questions: 0 };
         const totalPoints = pointsBreakdown.comments + pointsBreakdown.likes + pointsBreakdown.login + pointsBreakdown.questions;
 
-        console.log("Fetched Points Breakdown from DB:", pointsBreakdown);  // কনসোল লগ
-        console.log("Total Points:", totalPoints);  // কনসোল লগ
-
         res.status(200).send({
             userName: user.userName,
-            pointsBreakdown,  // pointsBreakdown সঠিকভাবে পাঠানো হচ্ছে
-            totalPoints,  // মোট পয়েন্ট
+            pointsBreakdown,  
+            totalPoints,  
         });
     } catch (error) {
         console.error("Error fetching user points breakdown:", error);
