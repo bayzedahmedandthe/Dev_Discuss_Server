@@ -122,9 +122,11 @@ app.post("/users", async (req, res) => {
         {
           $set: {
             userName: user.userName,
-            photo: user.photo
+            photo: user.photo,
+            role:'user',
+            member:'free'
           }
-        }
+        } 
       );
       return res.status(200).send({ message: "User updated", result });
     }
@@ -424,7 +426,12 @@ app.get("/userQuestions", async (req, res) => {
         res.status(500).send({ error: "Error fetching user questions" });
     }
 });
-
+app.delete('/question/:id',async(req,res)=>{
+    const id =req.params.id
+    const filter = {_id : new ObjectId(id)}
+    const result = await questionCollection.deleteOne(filter)
+    res.send(result)
+})
 app.delete("/userQuestions/:id", async (req, res) => {
     try {
         const id = req.params.id;
