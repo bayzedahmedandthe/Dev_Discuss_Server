@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { default: axios } = require("axios");
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -117,25 +118,25 @@ app.get("/", (req, res) => {
 app.post("/users", async (req, res) => {
     const user = req.body;
     const existingUser = await usersCollection.findOne({ userEmail: user.userEmail });
-  
+
     if (existingUser) {
-      const result = await usersCollection.updateOne(
-        { userEmail: user.userEmail },
-        {
-          $set: {
-            userName: user.userName,
-            photo: user.photo
-          }
-        }
-      );
-      return res.status(200).send({ message: "User updated", result });
+        const result = await usersCollection.updateOne(
+            { userEmail: user.userEmail },
+            {
+                $set: {
+                    userName: user.userName,
+                    photo: user.photo
+                }
+            }
+        );
+        return res.status(200).send({ message: "User updated", result });
     }
-  
+
     const result = await usersCollection.insertOne(user);
     res.send(result);
     console.log(result);
-  });
-  
+});
+
 
 
 app.get('/users', async (req, res) => {
@@ -151,28 +152,28 @@ app.get('/usersAll', async (req, res) => {
 
 app.get("/leaderboard", async (req, res) => {
     try {
-      const { email } = req.query; // Logged-in user এর email
-  
-      const allUsers = await usersCollection
-        .find({}, { projection: { email: 1, userEmail: 1, userName: 1, photo: 1, points: 1 } })
-        .sort({ points: -1 })
-        .toArray();
-  
-      const topUsers = allUsers.slice(0, 10); // Top 10 users
-      const userIndex = allUsers.findIndex(user => user.email === email || user.userEmail === email);
-      const currentUser = userIndex !== -1 ? {
-        ...allUsers[userIndex],
-        rank: userIndex + 1, 
-      } : null;
-  
-      res.send({ topUsers, currentUser, totalUsers: allUsers.length });
+        const { email } = req.query; // Logged-in user এর email
+
+        const allUsers = await usersCollection
+            .find({}, { projection: { email: 1, userEmail: 1, userName: 1, photo: 1, points: 1 } })
+            .sort({ points: -1 })
+            .toArray();
+
+        const topUsers = allUsers.slice(0, 10); // Top 10 users
+        const userIndex = allUsers.findIndex(user => user.email === email || user.userEmail === email);
+        const currentUser = userIndex !== -1 ? {
+            ...allUsers[userIndex],
+            rank: userIndex + 1,
+        } : null;
+
+        res.send({ topUsers, currentUser, totalUsers: allUsers.length });
     } catch (error) {
-      console.error("Leaderboard fetch error:", error);
-      res.status(500).send({ message: "Internal server error" });
+        console.error("Leaderboard fetch error:", error);
+        res.status(500).send({ message: "Internal server error" });
     }
-  });
-  
-  
+});
+
+
 app.get('/users/points-breakdown', async (req, res) => {
     const email = req.query.email;
 
@@ -188,8 +189,8 @@ app.get('/users/points-breakdown', async (req, res) => {
 
         res.status(200).send({
             userName: user.userName,
-            pointsBreakdown,  
-            totalPoints,  
+            pointsBreakdown,
+            totalPoints,
         });
     } catch (error) {
         console.error("Error fetching user points breakdown:", error);
@@ -204,7 +205,7 @@ app.get('/users/points-breakdown', async (req, res) => {
 // Merchant Panel URL: https://sandbox.sslcommerz.com/manage/ (Credential as you inputted in the time of registration)
 
 
- 
+
 // Store name: testphpol15yi
 // Registered URL: www.Dev_Discuss.com
 // Session API to generate transaction: https://sandbox.sslcommerz.com/gwprocess/v3/api.php
@@ -212,12 +213,69 @@ app.get('/users/points-breakdown', async (req, res) => {
 // Validation API (Web Service) name: https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php
 
 // Payment related API
-app.post("/payment", async(req, res) => {
+const qs = require("qs"); // এইটা Node.js এর জন্য
+
+app.post("/create-ssl-payment", async (req, res) => {
     const paymentData = req.body;
-    console.log(paymentData);
-    const result = await paymentCollection.insertOne(paymentData);
-    res.send(result)
-})
+    const trxid = new ObjectId().toString();
+    paymentData.transactionID = trxid;
+
+    const initate = {
+        store_id: "phpol68105136cfb80",
+        store_passwd: "phpol68105136cfb80@ssl",
+        total_amount: `${paymentData.price}`,
+        currency: "USD",
+        tran_id: trxid,
+        success_url: "http://localhost:5173/success-payment",
+        fail_url: "http://localhost:5173/fail",
+        cancel_url: "http://localhost:5173/cancel",
+        ipn_url: "http://localhost:5000/ipn-success-payment",
+        cus_name: `${paymentData.userName}`,
+        cus_email: `${paymentData.userEmail}`,
+        cus_add1: "Dhaka",
+        cus_add2: "Dhaka",
+        cus_city: "Dhaka",
+        cus_state: "Dhaka",
+        cus_postcode: "1000",
+        cus_country: "Bangladesh",
+        cus_phone: "01711111111",
+        cus_fax: "01711111111",
+        shipping_method: "NO",
+        product_name: "badges",
+        product_category: "premium",
+        ship_name: "Customer Name",
+        product_profile: "general",
+        ship_add1: "Dhaka",
+        ship_add2: "Dhaka",
+        ship_city: "Dhaka",
+        ship_state: "Dhaka",
+        ship_postcode: "1000",
+        ship_country: "Bangladesh",
+        multi_card_name: "mastercard,visacard,amexcard",
+        value_a: "ref001_A",
+        value_b: "ref002_B",
+        value_c: "ref003_C",
+        value_d: "ref004_D"
+    };
+
+    try {
+        const inResponse = await axios.post(
+            "https://sandbox.sslcommerz.com/gwprocess/v4/api.php",
+            qs.stringify(initate),
+            {
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                }
+            }
+        );
+        const saveData = await paymentCollection.insertOne(paymentData);
+        const gatewayURL = inResponse?.data?.GatewayPageURL
+        res.send({gatewayURL});
+    } catch (error) {
+        console.error(error.response?.data || error.message);
+        res.status(500).send("Payment initialization failed");
+    }
+});
 
 // ✅ GET All Questions
 app.get("/questions", async (req, res) => {
