@@ -122,14 +122,15 @@ isAdmin = true
     }
     res.send(isAdmin)
 })
-app.delete('/userRemove/:email',async(req,res)=>{
-    const email = req.params.email
-    const filter = { userEmail: email };
+app.delete('/userRemove/:id',async(req,res)=>{
+    const id = req.params.id
+    const filter = {_id: new ObjectId(id)}
     const result = await usersCollection.deleteOne(filter)
     res.send(result)
 })
 app.patch('/userRole/update/:email', async (req, res) => {
     const email = req.params.email;
+   
     const filter = { userEmail: email };
 
     const user = await usersCollection.findOne(filter);
@@ -140,7 +141,8 @@ app.patch('/userRole/update/:email', async (req, res) => {
 
  
     if (user.role && user.role === 'admin') {
-        return res.send({ message: "Already an admin!" });
+      
+        return res.send({ message: "Already an admin!", role});
     }
 
 
@@ -174,7 +176,9 @@ res.send(result)
 app.post("/users", async (req, res) => {
     const user = req.body;
     const existingUser = await usersCollection.findOne({ userEmail: user.userEmail });
-  
+    if(existingUser.role || existingUser.userName){
+        return res.send({message:'user already updated'})
+    }
     if (existingUser) {
       const result = await usersCollection.updateOne(
         { userEmail: user.userEmail },
