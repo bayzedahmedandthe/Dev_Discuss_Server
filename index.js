@@ -37,6 +37,7 @@ let savesQuestionsCollection;
 let blogCollection;
 let problemCollection;
 let eventCollection;
+let paymentCollection;
 
 
 async function run() {
@@ -49,6 +50,7 @@ async function run() {
         blogCollection = client.db("devDB").collection("blogs");
         problemCollection = client.db('devDB').collection('problems');
         eventCollection = client.db('devDB').collection('events');
+        paymentCollection = client.db("devDB").collection("payment")
 
 
     } catch (error) {
@@ -195,9 +197,27 @@ app.get('/users/points-breakdown', async (req, res) => {
     }
 });
 
+// Store ID: phpol68105136cfb80
+// Store Password (API/Secret Key): phpol68105136cfb80@ssl
 
 
+// Merchant Panel URL: https://sandbox.sslcommerz.com/manage/ (Credential as you inputted in the time of registration)
 
+
+ 
+// Store name: testphpol15yi
+// Registered URL: www.Dev_Discuss.com
+// Session API to generate transaction: https://sandbox.sslcommerz.com/gwprocess/v3/api.php
+// Validation API: https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php?wsdl
+// Validation API (Web Service) name: https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php
+
+// Payment related API
+app.post("/payment", async(req, res) => {
+    const paymentData = req.body;
+    console.log(paymentData);
+    const result = await paymentCollection.insertOne(paymentData);
+    res.send(result)
+})
 
 // ✅ GET All Questions
 app.get("/questions", async (req, res) => {
