@@ -312,7 +312,18 @@ app.get("/questions/:id", async (req, res) => {
 // ✅ POST New Question
 app.post("/questions", async (req, res) => {
     try {
-        const { userId, ...rest } = req.body;
+        const {userId, ...rest } = req.body;
+        const {userEmail}=req.body
+console.log(userEmail)
+
+const filter = {userEmail}
+const checkRole = await usersCollection.findOne(filter)
+const countTotalQuestion = await questionCollection.find(filter).toArray();
+console.log(checkRole.member,countTotalQuestion.length)
+if(checkRole.member === 'free' && countTotalQuestion.length >=10){
+    return res.send({message:"You have reached your question limit. Please upgrade your plan to continue asking unlimited questions."})
+}
+
 
         if (!userId || !ObjectId.isValid(userId)) {
             return res.status(400).send({ error: "Invalid or missing user ID" });
@@ -607,7 +618,13 @@ app.post('/questions/:id/like', async (req, res) => {
 app.post("/saves", async (req, res) => {
     try {
         const savesQuestions = req.body;
-
+        const {email}=req.body
+        console.log(email)
+        const checkMemberShip = await usersCollection.findOne({userEmail:email})
+        const countTotalSave = await savesQuestionsCollection.find({email}).toArray()
+        if(checkMemberShip.member ==='free' && countTotalSave.length >=10){
+            return res.send({message:'You have reached your save question limit. Please upgrade your plan to continue save unlimited questions.'})
+        }
         const result = await savesQuestionsCollection.insertOne(savesQuestions);
         res.send(result);
     } catch (error) {
