@@ -3,7 +3,10 @@ const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { default: axios } = require("axios");
+const SSLCommerzPayment = require('sslcommerz-lts');
+const store_id = process.env.SSLCOMMERZE_STORE_ID;
+const store_passwd = process.env.SSLCOMMERZE_STORE_PASS;
+const is_live = false //true for live, false for sandbox
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -20,6 +23,7 @@ app.use(
 );
 
 app.use(express.json());
+// app.use(express.urlencoded());
 
 
 // ✅ MongoDB Connection
@@ -198,84 +202,8 @@ app.get('/users/points-breakdown', async (req, res) => {
     }
 });
 
-// Store ID: phpol68105136cfb80
-// Store Password (API/Secret Key): phpol68105136cfb80@ssl
 
 
-// Merchant Panel URL: https://sandbox.sslcommerz.com/manage/ (Credential as you inputted in the time of registration)
-
-
-
-// Store name: testphpol15yi
-// Registered URL: www.Dev_Discuss.com
-// Session API to generate transaction: https://sandbox.sslcommerz.com/gwprocess/v3/api.php
-// Validation API: https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php?wsdl
-// Validation API (Web Service) name: https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php
-
-// Payment related API
-const qs = require("qs"); // এইটা Node.js এর জন্য
-
-app.post("/create-ssl-payment", async (req, res) => {
-    const paymentData = req.body;
-    const trxid = new ObjectId().toString();
-    paymentData.transactionID = trxid;
-
-    const initate = {
-        store_id: "phpol68105136cfb80",
-        store_passwd: "phpol68105136cfb80@ssl",
-        total_amount: `${paymentData.price}`,
-        currency: "USD",
-        tran_id: trxid,
-        success_url: "http://localhost:5173/success-payment",
-        fail_url: "http://localhost:5173/fail",
-        cancel_url: "http://localhost:5173/cancel",
-        ipn_url: "http://localhost:5000/ipn-success-payment",
-        cus_name: `${paymentData.userName}`,
-        cus_email: `${paymentData.userEmail}`,
-        cus_add1: "Dhaka",
-        cus_add2: "Dhaka",
-        cus_city: "Dhaka",
-        cus_state: "Dhaka",
-        cus_postcode: "1000",
-        cus_country: "Bangladesh",
-        cus_phone: "01711111111",
-        cus_fax: "01711111111",
-        shipping_method: "NO",
-        product_name: "badges",
-        product_category: "premium",
-        ship_name: "Customer Name",
-        product_profile: "general",
-        ship_add1: "Dhaka",
-        ship_add2: "Dhaka",
-        ship_city: "Dhaka",
-        ship_state: "Dhaka",
-        ship_postcode: "1000",
-        ship_country: "Bangladesh",
-        multi_card_name: "mastercard,visacard,amexcard",
-        value_a: "ref001_A",
-        value_b: "ref002_B",
-        value_c: "ref003_C",
-        value_d: "ref004_D"
-    };
-
-    try {
-        const inResponse = await axios.post(
-            "https://sandbox.sslcommerz.com/gwprocess/v4/api.php",
-            qs.stringify(initate),
-            {
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded"
-                }
-            }
-        );
-        const saveData = await paymentCollection.insertOne(paymentData);
-        const gatewayURL = inResponse?.data?.GatewayPageURL
-        res.send({gatewayURL});
-    } catch (error) {
-        console.error(error.response?.data || error.message);
-        res.status(500).send("Payment initialization failed");
-    }
-});
 
 // ✅ GET All Questions
 app.get("/questions", async (req, res) => {
@@ -965,6 +893,74 @@ app.get("/events/:id", async (req, res) => {
     }
 });
 
+// Payment related API
+
+const tran_id = new ObjectId().toString();
+
+app.post("/order", async (req, res) => {
+    const orderData = req.body;
+    const data = {
+        total_amount: 5000,
+        currency: 'BDT',
+        tran_id: tran_id, // use unique tran_id for each api call
+        success_url: `http://localhost:5000/payment-success/${tran_id}`,
+        fail_url: 'http://localhost:3030/fail',
+        cancel_url: 'http://localhost:3030/cancel',
+        ipn_url: 'http://localhost:3030/ipn',
+        shipping_method: 'Courier',
+        product_name: 'Computer.',
+        product_category: 'Electronic',
+        product_profile: 'general',
+        cus_name: orderData.userName,
+        cus_email: orderData.userEmail,
+        cus_add1: 'Dhaka',
+        cus_add2: 'Dhaka',
+        cus_city: 'Dhaka',
+        cus_state: 'Dhaka',
+        cus_postcode: '1000',
+        cus_country: 'Bangladesh',
+        cus_phone: '01711111111',
+        cus_fax: '01711111111',
+        ship_name: 'Customer Name',
+        ship_add1: 'Dhaka',
+        ship_add2: 'Dhaka',
+        ship_city: 'Dhaka',
+        ship_state: 'Dhaka',
+        ship_postcode: 1000,
+        ship_country: 'Bangladesh',
+    };
+    // console.log("orderData",data);
+    const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live)
+    sslcz.init(data).then(apiResponse => {
+        // Redirect the user to payment gateway
+        let GatewayPageURL = apiResponse.GatewayPageURL
+        res.send({ url: GatewayPageURL })
+        console.log('Redirecting to: ', GatewayPageURL)
+
+        const finalOrder = {
+            paidStatus: false,
+            tranjectionID: tran_id,
+            buyerEmail: orderData.userEmail, 
+            buyerName: orderData.userName
+        };
+
+        const result =  paymentCollection.insertOne(finalOrder)
+    });
+
+    app.post("/payment-success/:tranID", async (req, res) => {
+        console.log(req.params.tranID);
+        
+        const result =await paymentCollection.updateOne({tranjectionID: req.params.tranID}, {
+            $set: {
+                paidStatus: true  
+            },
+        });
+        if(result.modifiedCount > 0){
+            res.redirect(`http://localhost:5173/payment-success/${req.params.tranID}`)
+        }
+    })
+
+});
 
 // ✅ Start Server
 app.listen(port, () => {
