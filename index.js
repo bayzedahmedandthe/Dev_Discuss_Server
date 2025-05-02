@@ -904,7 +904,7 @@ app.post("/order", async (req, res) => {
         currency: 'BDT',
         tran_id: tran_id, // use unique tran_id for each api call
         success_url: `http://localhost:5000/payment-success/${tran_id}`,
-        fail_url: 'http://localhost:3030/fail',
+        fail_url: `http://localhost:5000/payment-fail/${tran_id}`,
         cancel_url: 'http://localhost:3030/cancel',
         ipn_url: 'http://localhost:3030/ipn',
         shipping_method: 'Courier',
@@ -941,14 +941,14 @@ app.post("/order", async (req, res) => {
             paidStatus: false,
             tranjectionID: tran_id,
             buyerEmail: orderData.userEmail, 
-            buyerName: orderData.userName
+            buyerName: orderData.userName,
+            paymentDate: orderData.paymentDate
         };
 
         const result =  paymentCollection.insertOne(finalOrder)
     });
 
     app.post("/payment-success/:tranID", async (req, res) => {
-        console.log(req.params.tranID);
         
         const result =await paymentCollection.updateOne({tranjectionID: req.params.tranID}, {
             $set: {
@@ -958,7 +958,14 @@ app.post("/order", async (req, res) => {
         if(result.modifiedCount > 0){
             res.redirect(`http://localhost:5173/payment-success/${req.params.tranID}`)
         }
-    })
+    });
+
+    app.post("/payment-fail/:tranID", async(req, res) => {
+        const result = await paymentCollection.deleteOne({tranjectionID: req.params.tranID});
+        if(result.deletedCount){
+            res.redirect(`http://localhost:5173/payment-fail/${req.params.tranID}`)
+        }
+    });
 
 });
 
