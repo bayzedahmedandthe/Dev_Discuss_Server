@@ -619,7 +619,7 @@ app.post("/saves", async (req, res) => {
     try {
         const savesQuestions = req.body;
         const {email}=req.body
-        console.log(email)
+    //   catch email and membership
         const checkMemberShip = await usersCollection.findOne({userEmail:email})
         const countTotalSave = await savesQuestionsCollection.find({email}).toArray()
         if(checkMemberShip.member ==='free' && countTotalSave.length >=10){
