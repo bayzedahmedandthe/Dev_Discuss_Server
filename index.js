@@ -118,22 +118,87 @@ function extractLikelyTag(errorText, commonTags) {
 app.get("/", (req, res) => {
     res.send("🚀 Dev Discuss Server is running now on vercel.");
 });
+// check  admin role 
+app.get('/admin/:email',async(req,res)=>{
+    const email = req.params.email
+    const filter = { userEmail: email };
+    let isAdmin = false
+    const checkAdmin = await usersCollection.findOne(filter)
+    if(checkAdmin?.role === 'admin'){
+isAdmin = true
+    }
+    res.send(isAdmin)
+})
+app.delete('/userRemove/:id',async(req,res)=>{
+    const id = req.params.id
+    const filter = {_id: new ObjectId(id)}
+    const result = await usersCollection.deleteOne(filter)
+    res.send(result)
+})
+app.patch('/userRole/update/:email', async (req, res) => {
+    const email = req.params.email;
+   
+    const filter = { userEmail: email };
 
+    const user = await usersCollection.findOne(filter);
+
+    if (!user) {
+        return res.status(404).send({ message: "User not found" });
+    }
+
+ 
+    if (user.role && user.role === 'admin') {
+      
+        return res.send({ message: "Already an admin!", role});
+    }
+
+
+    const updateDoc = {
+        $set: {
+            role: 'admin'
+        }
+    };
+
+    const result = await usersCollection.updateOne(filter, updateDoc);
+
+    if (result.modifiedCount > 0) {
+        res.send({ message: "Role updated to admin!", result });
+    } else {
+        res.send({ message: "Failed to update role", result });
+    }
+});
+
+app.patch('/userMembership/update/:email',async(req,res)=>{
+    const email = req.params.email
+    const filter = { userEmail: email };
+
+  const updateDoc={
+    $set:{
+        member:'premium'
+    }
+  }
+const result = await usersCollection.updateOne(filter,updateDoc)
+res.send(result)
+})
 app.post("/users", async (req, res) => {
     const user = req.body;
     const existingUser = await usersCollection.findOne({ userEmail: user.userEmail });
-
+    if(existingUser.role || existingUser.userName){
+        return res.send({message:'user already updated'})
+    }
     if (existingUser) {
-        const result = await usersCollection.updateOne(
-            { userEmail: user.userEmail },
-            {
-                $set: {
-                    userName: user.userName,
-                    photo: user.photo
-                }
-            }
-        );
-        return res.status(200).send({ message: "User updated", result });
+      const result = await usersCollection.updateOne(
+        { userEmail: user.userEmail },
+        {
+          $set: {
+            userName: user.userName,
+            photo: user.photo,
+            role:'user',
+            member:'free'
+          }
+        } 
+      );
+      return res.status(200).send({ message: "User updated", result });
     }
 
     const result = await usersCollection.insertOne(user);
@@ -430,7 +495,12 @@ app.get("/userQuestions", async (req, res) => {
         res.status(500).send({ error: "Error fetching user questions" });
     }
 });
-
+app.delete('/question/:id',async(req,res)=>{
+    const id =req.params.id
+    const filter = {_id : new ObjectId(id)}
+    const result = await questionCollection.deleteOne(filter)
+    res.send(result)
+})
 app.delete("/userQuestions/:id", async (req, res) => {
     try {
         const id = req.params.id;
