@@ -4,7 +4,7 @@ const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 3000;
 
 const systemTheme = process.env.SYSTEM_INFO;
 const genAI = new GoogleGenerativeAI(process.env.AI_SECRET_API_KEY);
